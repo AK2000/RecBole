@@ -28,7 +28,7 @@ from torch.nn.utils.clip_grad import clip_grad_norm_
 from tqdm import tqdm
 
 from recbole.data.interaction import Interaction
-from recbole.data.dataloader import FullSortEvalDataLoader
+from recbole.data.dataloader import FullSortEvalDataLoader, TrainDataLoader
 from recbole.evaluator import Evaluator, Collector
 from recbole.utils import ensure_dir, get_local_time, early_stopping, calculate_valid_score, dict2str, \
     EvaluatorType, KGDataLoaderState, get_tensorboard, set_color, get_gpu_usage
@@ -178,8 +178,8 @@ class Trainer(AbstractTrainer):
             if self.clip_grad_norm:
                 clip_grad_norm_(self.model.parameters(), **self.clip_grad_norm)
             self.optimizer.step()
-            if self.gpu_available and show_progress:
-                iter_data.set_postfix_str(set_color('GPU RAM: ' + get_gpu_usage(self.device), 'yellow'))
+            # if self.gpu_available and show_progress:
+            #     iter_data.set_postfix_str(set_color('GPU RAM: ' + get_gpu_usage(self.device), 'yellow'))
         return total_loss
 
     def _valid_epoch(self, valid_data, show_progress=False):
@@ -309,6 +309,20 @@ class Trainer(AbstractTrainer):
 
         self.eval_collector.data_collect(train_data)
 
+        # self.model.train()
+        # for epoch_idx in range(self.start_epoch, 15):
+        #     training_end_time = time()
+        #     self.optimizer.zero_grad()
+        #     loss = self.model.pretraining_loss()
+        #     loss.backward()
+        #     self.optimizer.step()
+        #     training_start_time = time()
+
+        #     train_loss_output = \
+        #         self._generate_train_loss_output(epoch_idx, training_start_time, training_end_time, loss)
+        #     if verbose:
+        #         self.logger.info(train_loss_output)
+
         for epoch_idx in range(self.start_epoch, self.epochs):
             # train
             training_start_time = time()
@@ -330,6 +344,18 @@ class Trainer(AbstractTrainer):
                         self.logger.info(update_output)
                 continue
             if (epoch_idx + 1) % self.eval_step == 0:
+                # train_score_start_time = time()
+                # train_score, train_result = self._valid_epoch(train_data, show_progress=show_progress)
+                # train_score_end_time = time()
+                # train_score_output = (set_color("epoch %d evaluating", 'green') + " [" + set_color("time", 'blue')
+                #                     + ": %.2fs, " + set_color("train_score", 'blue') + ": %f]") % \
+                #                      (epoch_idx, train_score_end_time - train_score_start_time, train_score)
+                # train_result_output = set_color('train result', 'blue') + ': \n' + dict2str(train_result)
+                # if verbose:
+                #     self.logger.info(train_score_output)
+                #     self.logger.info(train_result_output)
+                # self.tensorboard.add_scalar('Train_score', train_score, epoch_idx)
+
                 valid_start_time = time()
                 valid_score, valid_result = self._valid_epoch(valid_data, show_progress=show_progress)
                 self.best_valid_score, self.cur_step, stop_flag, update_flag = early_stopping(
@@ -438,7 +464,7 @@ class Trainer(AbstractTrainer):
 
         self.model.eval()
 
-        if isinstance(eval_data, FullSortEvalDataLoader):
+        if isinstance(eval_data, FullSortEvalDataLoader) or isinstance(eval_data, TrainDataLoader):
             eval_func = self._full_sort_batch_eval
             if self.item_tensor is None:
                 self.item_tensor = eval_data.dataset.get_item_feature().to(self.device)
@@ -456,9 +482,15 @@ class Trainer(AbstractTrainer):
             ) if show_progress else eval_data
         )
         for batch_idx, batched_data in enumerate(iter_data):
+            if isinstance(eval_data, TrainDataLoader):
+                interaction = batched_data
+                inter_num = len(interaction)
+                positive_u = torch.arange(inter_num)
+                batched_data = (interaction, None, positive_u, interaction[self.config['ITEM_ID_FIELD']])
+            
             interaction, scores, positive_u, positive_i = eval_func(batched_data)
-            if self.gpu_available and show_progress:
-                iter_data.set_postfix_str(set_color('GPU RAM: ' + get_gpu_usage(self.device), 'yellow'))
+            # if self.gpu_available and show_progress:
+            #     iter_data.set_postfix_str(set_color('GPU RAM: ' + get_gpu_usage(self.device), 'yellow'))
             self.eval_collector.eval_batch_collect(scores, interaction, positive_u, positive_i)
         self.eval_collector.model_collect(self.model)
         struct = self.eval_collector.get_data_struct()

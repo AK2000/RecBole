@@ -277,8 +277,9 @@ class Config(object):
             if self.final_config_dict['loss_type'] in ['CE']:
                 if self.final_config_dict['MODEL_TYPE'] == ModelType.SEQUENTIAL and \
                    self.final_config_dict['neg_sampling'] is not None:
-                    raise ValueError(f"neg_sampling [{self.final_config_dict['neg_sampling']}] should be None "
-                                     f"when the loss_type is CE.")
+                    self.final_config_dict['neg_sampling'] = None
+                    #raise ValueError(f"neg_sampling [{self.final_config_dict['neg_sampling']}] should be None "
+                    #                 f"when the loss_type is CE.")
                 self.final_config_dict['MODEL_INPUT_TYPE'] = InputType.POINTWISE
             elif self.final_config_dict['loss_type'] in ['BPR']:
                 self.final_config_dict['MODEL_INPUT_TYPE'] = InputType.PAIRWISE

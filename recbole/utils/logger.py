@@ -68,7 +68,7 @@ def init_logger(config):
         >>> logger.info(train_result)
     """
     init(autoreset=True)
-    LOGROOT = './log/'
+    LOGROOT = config["log_path"]
     dir_name = os.path.dirname(LOGROOT)
     ensure_dir(dir_name)
 
